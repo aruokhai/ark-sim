@@ -1,33 +1,33 @@
 module User
 
-using Agents
+using Agents ,Distributions, Random
 
 # Step 1: Define the Bitcoin User Agent
-struct BitcoinUser <: AbstractAgent
+mutable struct ArkUser <: AbstractAgent
     id::Int                 # Unique ID
-    balance::Float64        # Wallet balance (in BTC)
     transaction_rate::Float64 # Probability of transacting
-    strategy::String        # Behavior: "holder", "trader", "miner"
+    transaction_value::String        # Behavior: "high", "medium", "low"
+    total_amount_transfers::Float64
+     #  TODO: reliability: Float64
 end
 
 # Step 2: Define Agent Behaviors
-function user_behavior!(user, network)
-    if user.strategy == "trader"
-        # Simulate trading: buy/sell based on Bitcoin price
-        price = network[:price]
-        trade_amount = rand(Uniform(0.01, 0.1)) # Random trade amount
-        if rand() > 0.5
-            user.balance += trade_amount / price  # Buy BTC
-        else
-            user.balance -= trade_amount / price  # Sell BTC
-        end
-    elseif user.strategy == "miner"
-        # Simulate mining: small chance of earning rewards
-        reward = 6.25  # Current BTC block reward
-        if rand() < 0.001
-            user.balance += reward
-        end
+function user_behavior!(user, model)
+    price = model.price
+    transfer_amount = 0.0
+    if rand(Bernoulli(user.transaction_rate)) == 0
+        return 0
     end
+
+    if user.transaction_value == "high"
+        transfer_amount =  (rand(Uniform(0.01, 0.1)))/ price # Random trade amount
+    elseif user.transaction_value == "medium"
+        transfer_amount = (rand(Uniform(0.001, 0.01)))/ price
+    elseif user.transaction_value == "low"
+        transfer_amount = (rand(Uniform(0.0001, 0.001)))/ price
+    end
+
+    user.total_amount_transfers += transfer_amount
 end
 
 end # module end
