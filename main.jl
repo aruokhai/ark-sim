@@ -1,7 +1,7 @@
 module Main
 include("src/ArkSim.jl")
 
-import .ArkSim: run_simulation
+using .ArkSim: run_simulation
 
 # Main Script
 function main()

@@ -7,11 +7,8 @@ using .Transaction: ArkTransaction
 
 
 mutable struct ArkProvider
-    id::Int                 # Unique ID
-    initial_liquidity::Float64
     current_liquidity::Float64
     round_lock_timeout::Int64
-    total_amount_transfers::Float64
     spent_transactions:: Array{ArkTransaction}
     unspent_transactions:: Array{ArkTransaction}
     is_liquid::Bool
@@ -32,7 +29,7 @@ function update_provider!(provider::ArkProvider, new_spent_outputs::Array{ArkTra
     end
 
     left_over_liquidity = provider.current_liquidity - reduce!(+,new_transferred_output)
-    if (left_over_liquidity > 0.0000_0000)
+    if (left_over_liquidity > 0.0000_0546)
         provider.current_liquidity = left_over_liquidity
         push!(provider.unspent_transactions, new_transaction)
         append!(provider.spent_transactions, new_spent_outputs)
