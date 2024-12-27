@@ -1,41 +1,49 @@
-module Provider
-include("Transaction.jl")
-
-
 using Agents ,Distributions, Random
-using .Transaction: ArkTransaction
-
 
 mutable struct ArkProvider
-    current_liquidity::Float64
+    current_liquidity::Int64
     round_lock_timeout::Int64
-    spent_transactions:: Array{ArkTransaction}
-    unspent_transactions:: Array{ArkTransaction}
+    transactions:: Array{ArkTransaction}
     is_liquid::Bool
 end
 
-
-function update_provider!(provider::ArkProvider, new_spent_outputs::Array{ArkTransaction}, new_transferred_output::Array{ArkTransaction}, current_time::Int64)
+function update_provider!(
+    provider::ArkProvider,
+    new_transactions::Array{ArkTransaction},
+    current_time::Int
+)
+    # Remove all spent_transactions whose timeout is >= current_time.
+    # (If the logic is reversed, adjust accordingly.)
     i = 1
-    arrLength = length(provider.spent_transaction)
-    while i <= arrLength
-        transaction = get(provider.spent_transaction, i, nothing)
-        if transaction.timeout >= current_time 
-            provider.current_liquidity += transaction.amount;
-            popat!(provider.spent_transaction, i)  # Remove the element at index `i`
+    while i <= length(provider.transactions)
+        transaction = provider.transactions[i]
+        if transaction.timeout <= current_time
+            provider.current_liquidity += transaction.amount
+            popat!(provider.transactions, i)  
+            # or deleteat!(provider.spent_transactions, i) if you prefer Base Julia
         else
-            i += 1  # Only increment if no element was removed
+            i += 1
         end
     end
 
-    left_over_liquidity = provider.current_liquidity - reduce!(+,new_transferred_output)
-    if (left_over_liquidity > 0.0000_0546)
+    # Sum the amount field of new transferred outputs
+    transferred_amount = sum(tx -> tx.amount, new_transactions)
+    left_over_liquidity = provider.current_liquidity - transferred_amount
+
+    # Define a named threshold for clarity
+    MIN_LIQUIDITY_THRESHOLD = 546
+
+    if left_over_liquidity > MIN_LIQUIDITY_THRESHOLD
+        # Update provider’s liquidity
         provider.current_liquidity = left_over_liquidity
-        push!(provider.unspent_transactions, new_transaction)
-        append!(provider.spent_transactions, new_spent_outputs)
+
+        # Add the new transferred outputs to unspent
+        # (If it’s supposed to be just one new transaction, adjust accordingly.)
+        append!(provider.transactions, new_transactions)
     else
+        # Mark the provider as illiquid
         provider.is_liquid = false
     end
 end
 
-end
+
