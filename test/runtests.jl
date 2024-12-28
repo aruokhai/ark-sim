@@ -2,6 +2,7 @@
 
 using Test
 using Random: seed!
+using UUIDs: uuid4
 
 include("../src/ArkSim.jl")
 using .ArkSim: ArkUser, ArkTransaction, ArkProvider, user_behavior!, select_coins_greedy,BTC
@@ -16,30 +17,21 @@ mutable struct MockModel
 end
 
 @testset "ArkUser tests" begin
-
     @testset "ArkUser Instantiation" begin
         # Create an ArkUser
-        user = ArkUser(1, 0.5, "medium", Dict{Int64, ArkTransaction}())
+        user = ArkUser(1, 0.5, "medium")
 
         @test user.id == 1
         @test user.transaction_rate == 0.5
         @test user.transaction_value == "medium"
-        @test user.utxos == Dict{Int64, ArkTransaction}()
     end
 
 
     @testset "select_coins_greedy tests" begin
         # Build some ArkTransactions for testing
-        tx1 = ArkTransaction(1, 2, 0, 1, false)   # from user 1 to user 2
-        tx2 = ArkTransaction(1, 2, 0, 5, false)
-        tx3 = ArkTransaction(1, 2, 0, 2, false)
-
-        # Insert these transactions in a dictionary keyed by transaction id
-        utxos = Dict(
-            1 => tx1,
-            2 => tx2,
-            3 => tx3
-        )
+        utxos = [ ArkTransaction(uuid4(), 2, 0, 1, false), # from user 1 to user 2
+                         ArkTransaction(uuid4(), 2, 0, 5, false),
+                         ArkTransaction(uuid4(), 2, 0, 2, false) ]
 
         @testset "Exact match test" begin
             target_amount = 5
@@ -90,16 +82,22 @@ end
         # Then we test user_behavior! in different scenarios.
 
         # 1) Build a user with some typical initial state
-        user = ArkUser(10,1.0,"low", Dict{Int64, ArkTransaction}())
+        user = ArkUser(10,1.0,"low")
 
         # 2) Create some unspent transactions in the provider that belong to user
-        u_tx1 = ArkTransaction(10, 10, 20, 15_000_000, false)  # user is both sender/receiver
-        u_tx2 = ArkTransaction(11, 10, 20, 20_000_000, false)
-        provider = ArkProvider(100_000_000, 10,[u_tx1, u_tx2], true)
+        id1 = uuid4()
+        id2 = uuid4()
+
+        u_tx1 = ArkTransaction(id1, 10, 20, 15_000_000, false)  # user is both sender/receiver
+        u_tx2 = ArkTransaction(id2, 10, 20, 20_000_000, false)
+
+        utxo_dict = Dict([u_tx1.id => u_tx1, u_tx2.id => u_tx2])
+
+        provider = ArkProvider(100_000_000, 10,utxo_dict, true)
         
         # 3) Build a model 
-        user2 = ArkUser(20, 1.0, "medium", Dict{Int64, ArkTransaction}()
-        )
+        user2 = ArkUser(20, 1.0, "medium")
+    
         agents = [user, user2]
         model = MockModel(provider, agents, 0)
 
@@ -107,16 +105,13 @@ end
             # We'll fix the RNG seed for reproducibility
             seed!(1234)
 
-            @test user_behavior!(user, model) !== nothing
+            @test user_behavior!(user, model) == nothing
             # After user_behavior!, user’s UTXOs should be updated:
             #   - The user sees the new unspent UTXOs from the provider (u_tx1, u_tx2)
             #   - Then user spends some coins, leading to new transactions
             # Check that user now has *some* entries in utxos
-            @test !isempty(user.utxos)
-
             # In the provider, the spent transactions are removed from unspent
             # and replaced with new ones (change + transfer).
-            @test length(user.utxos) == 2
             @test length(provider.transactions) == 4  # spent 2, added 2 again
             @test provider.current_liquidity == 80_000_000
         end

@@ -1,6 +1,7 @@
-import  Agents: AbstractAgent 
+import  Agents: AbstractAgent, ran 
 import Distributions: Uniform, Bernoulli 
-import Random: rand 
+import Random: rand
+import UUIDs: uuid4, UUID
 
 const SATOSHIS_PER_BTC = 100_000_000
 const DUST_LIMIT_SATS = 546  # Typical minimum dust threshold in satoshis
@@ -10,7 +11,6 @@ mutable struct ArkUser <: AbstractAgent
     id::Int                 # Unique ID
     transaction_rate::Float64 # Probability of transacting
     transaction_value::String        # Behavior: "high", "medium", "low"
-    utxos::Dict{Int64, ArkTransaction}
      #  TODO: reliability: Float64
 end
 
@@ -27,53 +27,41 @@ function user_behavior!(user, model)
 
     # Compute transfer_amount in satoshis based on user's transaction_value
     transfer_amount = rand_transfer_amount(user.transaction_value)
-
-    # Pull in newly discovered UTXOs from provider that belong to this user
-    i = 1;
-    for utxo in provider.transactions
-        if !utxo.isClaimed && utxo.receiver_id == user.id
-            user.utxos[utxo.id] = utxo
-            println("User ", user.id, " found UTXO ", utxo.id)
-            model.provider.transactions[i].isClaimed = true
-        end
-        i += 1
-    end
+    user_utxos = get_user_utxos(user, provider)
 
     # Calculate how much balance remains after proposed transfer
-    amount_remaining = sum(utxo -> utxo.amount, values(user.utxos)) - transfer_amount
-
+    balance = sum(utxo -> utxo.amount, user_utxos)
+    println(transfer_amount)
+    amount_remaining = balance - transfer_amount
+    println(user.id)
     # If the remaining balance is below dust threshold, skip transaction
     if amount_remaining <= DUST_LIMIT_SATS
+        println(user_utxos)
+        println("User ", user.id,"amount_remaining", amount_remaining, "balance", balance, " skipped transaction due to dust limit")
         return
     end
 
     # Select coins to spend using a greedy algorithm
-    spent_utxos, _, change_amount = select_coins_greedy(user.utxos, transfer_amount)
+    spent_utxos, _, change_amount = select_coins_greedy(user_utxos, transfer_amount)
     println("User ", user.id, " selected UTXOs to spend: ", spent_utxos, "spent_amount: ", transfer_amount, "change_amount: ", change_amount)   
 
-    # Remove the spent UTXOs from user's UTXO set
-    for utxo in spent_utxos
-        println("User ", user.id, " spent UTXO ", utxo.id)
-        delete!(user.utxos, utxo.id)
-    end
-
     # Pick a random agent to send funds to
-    random_agent = rand(model.agents)
+
+    returned_random_agent = random_agent(model)
 
     # Construct transactions: change back to self, and the actual transfer
-    transfer_transaction = ArkTransaction(rand(1:100000), random_agent.id, current_time + 10, transfer_amount, false)
+    transfer_transaction = ArkTransaction(uuid4(), returned_random_agent.id, current_time + 10, transfer_amount, false)
     new_transactions = [transfer_transaction]    
 
     # Only add a change transaction if change_amount is positive
     if change_amount > 0
-        change_transaction = ArkTransaction(rand(1:100000), user.id, current_time + 10, change_amount, true)
+        change_transaction = ArkTransaction(uuid4(), user.id, current_time + 10, change_amount, false)
         println("User ", user.id, " received change UTXO ", change_transaction.id)
-        user.utxos[change_transaction.id] = change_transaction
         push!(new_transactions, change_transaction)
     end
 
     # Update the provider with spent UTXOs & newly created transactions
-    update_provider!(provider, new_transactions, current_time)
+    update_provider!(provider, new_transactions,spent_utxos, current_time)
 end
 
 """
@@ -96,15 +84,24 @@ function rand_transfer_amount(tier::String)::Int
     end
 end
 
+function get_user_utxos(user::ArkUser, provider::ArkProvider)::Array{ArkTransaction}
+    user_utxos = ArkTransaction[]
+    for utxo in values(provider.transactions)
+        if !utxo.isSpent && utxo.receiver_id == user.id
+            push!(user_utxos, utxo)
+        end
+    end
+    return user_utxos
+end
 
+"""
+    select_coins_greedy(utxos::Dict{UUID, ArkTransaction}, target::Int64) -> Tuple{Array{ArkTransaction}, Int64, Int64}
 
+"""
 
-function select_coins_greedy(utxos::Dict{Int, ArkTransaction}, target::Int64)
-    # Convert the dictionary values to a vector
-    coin_list = collect(values(utxos))
-    
+function select_coins_greedy(utxos::Array{ArkTransaction}, target::Int64) 
     # Sort coins in descending order by amount
-    sorted_coins = sort(coin_list, by = c -> c.amount, rev = true)
+    sorted_coins = sort(utxos, by = c -> c.amount, rev = true)
 
     # Initialize selected coins array
     selected = ArkTransaction[]

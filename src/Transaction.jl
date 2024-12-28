@@ -1,9 +1,10 @@
+using UUIDs
 mutable struct ArkTransaction
-    id::Int
+    id::UUID
     receiver_id::Int
     timeout::Int64
     amount::Int64
-    isClaimed::Bool
+    isSpent::Bool
 end 
 
 
