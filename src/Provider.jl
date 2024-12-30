@@ -15,9 +15,9 @@ function update_provider!(
 )
     # Remove all spent_transactions whose timeout is >= current_time.
     for utxo in values(provider.transactions)
-        if utxo.timeout <= current_time
+        if utxo.timeout <= current_time && !(utxo.isForfeited)
             provider.current_liquidity += utxo.amount
-            delete!(provider.transactions, utxo.id)
+            provider.transactions[utxo.id].isForfeited = true
         end
     end
 
@@ -32,7 +32,6 @@ function update_provider!(
         # Check if all the spent UTXOs are available
         for utxo in spent_utxos
             if !haskey(provider.transactions, utxo.id)
-                println("Error: Provider does not have all the spent UTXOs")
                 return nothing
             end
         end
@@ -44,7 +43,8 @@ function update_provider!(
         
         # Update provider’s liquidity
         provider.current_liquidity = left_over_liquidity
-
+        println("provider liquidity", provider.current_liquidity)
+        println("current time", current_time)
         # Add the new transferred outputs to unspent
         for new_transactions in new_transactions
             provider.transactions[new_transactions.id] = new_transactions

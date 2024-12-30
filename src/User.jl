@@ -31,32 +31,28 @@ function user_behavior!(user, model)
 
     # Calculate how much balance remains after proposed transfer
     balance = sum(utxo -> utxo.amount, user_utxos)
-    println(transfer_amount)
+
     amount_remaining = balance - transfer_amount
-    println(user.id)
+
     # If the remaining balance is below dust threshold, skip transaction
     if amount_remaining <= DUST_LIMIT_SATS
-        println(user_utxos)
-        println("User ", user.id,"amount_remaining", amount_remaining, "balance", balance, " skipped transaction due to dust limit")
         return
     end
 
     # Select coins to spend using a greedy algorithm
     spent_utxos, _, change_amount = select_coins_greedy(user_utxos, transfer_amount)
-    println("User ", user.id, " selected UTXOs to spend: ", spent_utxos, "spent_amount: ", transfer_amount, "change_amount: ", change_amount)   
 
     # Pick a random agent to send funds to
 
     returned_random_agent = random_agent(model)
 
     # Construct transactions: change back to self, and the actual transfer
-    transfer_transaction = ArkTransaction(uuid4(), returned_random_agent.id, current_time + 10, transfer_amount, false)
+    transfer_transaction = ArkTransaction(uuid4(), returned_random_agent.id, current_time + 10, transfer_amount, false, false)
     new_transactions = [transfer_transaction]    
 
     # Only add a change transaction if change_amount is positive
     if change_amount > 0
-        change_transaction = ArkTransaction(uuid4(), user.id, current_time + 10, change_amount, false)
-        println("User ", user.id, " received change UTXO ", change_transaction.id)
+        change_transaction = ArkTransaction(uuid4(), user.id, current_time + 10, change_amount, false, false)
         push!(new_transactions, change_transaction)
     end
 
@@ -73,11 +69,11 @@ Generate a random transfer amount (in satoshis) based on the user's transaction 
 function rand_transfer_amount(tier::String)::Int
     if tier == "high"
         # Range: 0.01 BTC to 0.1 BTC, converted to satoshis
-        return round(Int, rand(Uniform(0.01, 0.1)) * SATOSHIS_PER_BTC)
+        return round(Int, rand(Uniform(0.005, 0.01)) * SATOSHIS_PER_BTC)
     elseif tier == "medium"
-        return round(Int, rand(Uniform(0.001, 0.01)) * SATOSHIS_PER_BTC)
+        return round(Int, rand(Uniform(0.001, 0.005)) * SATOSHIS_PER_BTC)
     elseif tier == "low"
-        return round(Int, rand(Uniform(0.0001, 0.001)) * SATOSHIS_PER_BTC)
+        return round(Int, rand(Uniform(0.0005, 0.001)) * SATOSHIS_PER_BTC)
     else
         # Default fallback or throw an error if tier is unknown
         error("Unknown transaction_value tier: $tier")
@@ -87,7 +83,7 @@ end
 function get_user_utxos(user::ArkUser, provider::ArkProvider)::Array{ArkTransaction}
     user_utxos = ArkTransaction[]
     for utxo in values(provider.transactions)
-        if !utxo.isSpent && utxo.receiver_id == user.id
+        if !utxo.isSpent && !utxo.isForfeited && utxo.receiver_id == user.id
             push!(user_utxos, utxo)
         end
     end

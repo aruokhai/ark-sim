@@ -27,7 +27,7 @@ function initialize_network(config::NetworkConfig)
     transactions = Dict{UUID, ArkTransaction}()
     for i in 1:length(users)
         id = uuid1()
-        transactions[id] = ArkTransaction(id, i, config.users_balance_timeout,config.users_balance_amount,  false) 
+        transactions[id] = ArkTransaction(id, i, config.users_balance_timeout,config.users_balance_amount,  false, false) 
     end
 
     # Define model properties using configuration
@@ -37,7 +37,6 @@ function initialize_network(config::NetworkConfig)
     # Define the model behavior
     function model_step!(model)
         model.current_time += 1
-        println("Model step")
     end
     
     # Initialize the model
@@ -60,7 +59,8 @@ end
 
 
 function run_network(config::NetworkConfig, steps::Int)
+    mdata= [(:provider)]
     model = initialize_network(config)  # Create a network 
-    run!(model, steps)           # Simulate 
+    return run!(model, steps; mdata)           # Simulate 
     
 end
