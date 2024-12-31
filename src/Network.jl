@@ -4,7 +4,7 @@ using UUIDs
 # Define the configuration structure
 struct NetworkConfig
     num_users::Int           # Number of users
-    provider_balance::Float64 # Initial balance of the provider
+    provider_balance::Int64 # Initial balance of the provider
     provider_round_lock_timeout::Int64 # Round lock timeout of the provider in days
     users_balance_amount:: Int64 # Default transaction amount
     users_balance_timeout::Int # Default transaction time
@@ -32,11 +32,18 @@ function initialize_network(config::NetworkConfig)
 
     # Define model properties using configuration
     properties = Dict(:provider => ArkProvider(config.provider_balance, config.provider_round_lock_timeout, transactions, true),
-        :current_time => 0 )
+        :current_time => 0,
+        :failed_transactions => Int64[],
+        :past_liquidity => config.provider_balance,
+        :participating_agent => 0)
 
     # Define the model behavior
     function model_step!(model)
         model.current_time += 1
+        model.failed_transactions = Int64[]
+        model.past_liquidity = model.provider.current_liquidity
+        model.participating_agent = 0
+        println("round", model.current_time, "completed")
     end
     
     # Initialize the model
@@ -59,7 +66,8 @@ end
 
 
 function run_network(config::NetworkConfig, steps::Int)
-    mdata= [(:provider)]
+
+    mdata = [(:failed_transactions), (:past_liquidity), (:participating_agent)]
     model = initialize_network(config)  # Create a network 
     return run!(model, steps; mdata)           # Simulate 
     

@@ -11,7 +11,8 @@ function update_provider!(
     provider::ArkProvider,
     new_transactions::Array{ArkTransaction},
     spent_utxos::Array{ArkTransaction},
-    current_time::Int
+    current_time::Int,
+    failed_transactions::Array{Int64}
 )
     # Remove all spent_transactions whose timeout is >= current_time.
     for utxo in values(provider.transactions)
@@ -43,15 +44,13 @@ function update_provider!(
         
         # Update provider’s liquidity
         provider.current_liquidity = left_over_liquidity
-        println("provider liquidity", provider.current_liquidity)
-        println("current time", current_time)
         # Add the new transferred outputs to unspent
         for new_transactions in new_transactions
             provider.transactions[new_transactions.id] = new_transactions
         end
     else
         # Mark the provider as illiquid
-        provider.is_liquid = false
+        append!(failed_transactions, map(tx -> tx.amount, new_transactions ) )
     end
 end
 

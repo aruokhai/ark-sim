@@ -18,6 +18,7 @@ end
 function user_behavior!(user, model)
     provider::ArkProvider = model.provider
     current_time = model.current_time
+    failed_transactions = model.failed_transactions
 
     # Decide if the user transacts this time step
     # rand() returns a uniform float in [0,1), so compare to transaction_rate
@@ -28,6 +29,10 @@ function user_behavior!(user, model)
     # Compute transfer_amount in satoshis based on user's transaction_value
     transfer_amount = rand_transfer_amount(user.transaction_value)
     user_utxos = get_user_utxos(user, provider)
+
+    if (length(user_utxos) == 0)
+        return
+    end
 
     # Calculate how much balance remains after proposed transfer
     balance = sum(utxo -> utxo.amount, user_utxos)
@@ -56,8 +61,9 @@ function user_behavior!(user, model)
         push!(new_transactions, change_transaction)
     end
 
+    model.participating_agent += 1
     # Update the provider with spent UTXOs & newly created transactions
-    update_provider!(provider, new_transactions,spent_utxos, current_time)
+    update_provider!(provider, new_transactions,spent_utxos, current_time, failed_transactions)
 end
 
 """
