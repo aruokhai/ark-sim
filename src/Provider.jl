@@ -4,6 +4,7 @@ mutable struct ArkProvider
     current_liquidity::Int64 # amount in satoshis controled by the provider
     round_lock_timeout::Int64 # timeout for the current round in days, after which the provider can withdraw the liquidity 
     transactions:: Dict{UUID, ArkTransaction} # vtxos that are transferred
+    agents_vtxos:: Dict{Int, Set{UUID}} # vtxos that are owned by agents
     round_agents:: Array{Int}
     is_liquid::Bool
 end
@@ -16,7 +17,6 @@ function update_provider!(
     sender_id::Int
 )
     
-
     # Sum the amount field of new transferred outputs
     transferred_amount = sum(tx -> tx.amount, new_transactions)
     left_over_liquidity = provider.current_liquidity - transferred_amount
@@ -46,6 +46,7 @@ function update_provider!(
         # Add the new transferred outputs to unspent
         for new_transactions in new_transactions
             provider.transactions[new_transactions.id] = new_transactions
+            push!(provider.agents_vtxos[new_transactions.receiver_id], new_transactions.id)
         end
     else
         # Mark the provider as illiquid

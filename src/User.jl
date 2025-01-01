@@ -10,8 +10,7 @@ const DUST_LIMIT_SATS = 546  # Typical minimum dust threshold in satoshis
 mutable struct ArkUser <: AbstractAgent
     id::Int                 # Unique ID
     transaction_rate::Float64 # Probability of transacting
-    transaction_value::String        # Behavior: "high", "medium", "low"
-     #  TODO: reliability: Float64
+    transaction_value::String  # Behavior: "high", "medium", "low"
 end
 
 
@@ -61,8 +60,6 @@ function user_behavior!(user, model)
         push!(new_transactions, change_transaction)
     end
 
-    model.participating_agent += 1
-    println("User participated");
     # Update the provider with spent UTXOs & newly created transactions
     update_provider!(provider, new_transactions,spent_utxos, failed_transactions, user.id)
 end
@@ -88,13 +85,8 @@ function rand_transfer_amount(tier::String)::Int
 end
 
 function get_user_utxos(user::ArkUser, provider::ArkProvider)::Array{ArkTransaction}
-    user_utxos = ArkTransaction[]
-    for utxo in values(provider.transactions)
-        if !utxo.isSpent utxo.receiver_id == user.id
-            push!(user_utxos, utxo)
-        end
-    end
-    return user_utxos
+    user_utxos_ids = get(provider.agents_vtxos, user.id, Set([]))
+    return [provider.transactions[utxo_id] for utxo_id in user_utxos_ids]
 end
 
 """

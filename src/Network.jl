@@ -25,13 +25,17 @@ function initialize_network(config::NetworkConfig)
     end
 
     transactions = Dict{UUID, ArkTransaction}()
+    agents_vtxos = Dict{Int, Set{UUID}}()
+
     for i in 1:length(users)
         id = uuid1()
-        transactions[id] = ArkTransaction(id, i, config.users_balance_timeout,config.users_balance_amount,  false) 
+        transactions[id] = ArkTransaction(id, i, config.users_balance_timeout,config.users_balance_amount,  false)
+        agents_vtxos[i] = Set([id]); 
     end
+    
 
     # Define model properties using configuration
-    properties = Dict(:provider => ArkProvider(config.provider_balance, config.provider_round_lock_timeout, transactions,[], true),
+    properties = Dict(:provider => ArkProvider(config.provider_balance, config.provider_round_lock_timeout, transactions,agents_vtxos,[], true),
         :current_time => 0,
         :failed_transactions => Int64[],
         :past_liquidity => config.provider_balance,
@@ -39,18 +43,19 @@ function initialize_network(config::NetworkConfig)
 
     # Define the model behavior
     function model_step!(model)
+        model.past_liquidity = model.provider.current_liquidity
+        model.current_time += 1
 
         # Remove all spent_transactions whose timeout is >= current_time.
         for utxo in values(model.provider.transactions)
             if utxo.timeout <= model.current_time
                 model.provider.current_liquidity += utxo.amount
                 delete!(model.provider.transactions, utxo.id)
+                delete!(model.provider.agents_vtxos[utxo.receiver_id], utxo.id)
             end
         end
 
-        model.current_time += 1
         model.failed_transactions = Int64[]
-        model.past_liquidity = model.provider.current_liquidity
         model.participating_agent = length(model.provider.round_agents)
         model.provider.round_agents = Int[]
         println("round", model.current_time, "completed")
