@@ -52,18 +52,19 @@ function user_behavior!(user, model)
     returned_random_agent = random_agent(model)
 
     # Construct transactions: change back to self, and the actual transfer
-    transfer_transaction = ArkTransaction(uuid4(), returned_random_agent.id, current_time + 10, transfer_amount, false, false)
+    transfer_transaction = ArkTransaction(uuid4(), returned_random_agent.id, current_time + 10, transfer_amount, false)
     new_transactions = [transfer_transaction]    
 
     # Only add a change transaction if change_amount is positive
     if change_amount > 0
-        change_transaction = ArkTransaction(uuid4(), user.id, current_time + 10, change_amount, false, false)
+        change_transaction = ArkTransaction(uuid4(), user.id, current_time + 10, change_amount, false)
         push!(new_transactions, change_transaction)
     end
 
     model.participating_agent += 1
+    println("User participated");
     # Update the provider with spent UTXOs & newly created transactions
-    update_provider!(provider, new_transactions,spent_utxos, current_time, failed_transactions)
+    update_provider!(provider, new_transactions,spent_utxos, failed_transactions, user.id)
 end
 
 """
@@ -89,7 +90,7 @@ end
 function get_user_utxos(user::ArkUser, provider::ArkProvider)::Array{ArkTransaction}
     user_utxos = ArkTransaction[]
     for utxo in values(provider.transactions)
-        if !utxo.isSpent && !utxo.isForfeited && utxo.receiver_id == user.id
+        if !utxo.isSpent utxo.receiver_id == user.id
             push!(user_utxos, utxo)
         end
     end

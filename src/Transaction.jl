@@ -5,7 +5,6 @@ mutable struct ArkTransaction
     timeout::Int64
     amount::Int64
     isSpent::Bool
-    isForfeited::Bool
 end 
 
 
