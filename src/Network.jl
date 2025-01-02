@@ -1,5 +1,7 @@
 using Random
 using UUIDs
+using Base.Threads
+using Agents
 
 # Define the configuration structure
 struct NetworkConfig
@@ -43,6 +45,14 @@ function initialize_network(config::NetworkConfig)
 
     # Define the model behavior
     function model_step!(model)
+
+        chunks = Iterators.partition(allagents(model), floor(Int,length(allagents(model)) ÷ Threads.nthreads()))
+        Threads.@threads for chunk in collect(chunks)
+            for agent in chunk
+                user_behavior!(agent, model)
+            end
+        end 
+
         model.past_liquidity = model.provider.current_liquidity
         model.current_time += 1
 
@@ -64,7 +74,6 @@ function initialize_network(config::NetworkConfig)
     # Initialize the model
     model = StandardABM(
         ArkUser, 
-        agent_step! = user_behavior!, 
         model_step! = model_step!,
         properties = properties, 
         scheduler = Schedulers.Randomly()

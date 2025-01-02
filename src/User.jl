@@ -2,6 +2,11 @@ import  Agents: AbstractAgent, ran
 import Distributions: Uniform, Bernoulli 
 import Random: rand
 import UUIDs: uuid4, UUID
+using Base.Threads
+
+# Create a ReentrantLock
+l = ReentrantLock()
+
 
 const SATOSHIS_PER_BTC = 100_000_000
 const DUST_LIMIT_SATS = 546  # Typical minimum dust threshold in satoshis
@@ -60,8 +65,11 @@ function user_behavior!(user, model)
         push!(new_transactions, change_transaction)
     end
 
-    # Update the provider with spent UTXOs & newly created transactions
-    update_provider!(provider, new_transactions,spent_utxos, failed_transactions, user.id)
+    lock(l) do 
+        # Update the provider with spent UTXOs & newly created transactions
+        update_provider!(provider, new_transactions,spent_utxos, failed_transactions, user.id) 
+    end
+
 end
 
 """
