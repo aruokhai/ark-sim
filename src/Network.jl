@@ -2,6 +2,7 @@ using Random
 using UUIDs
 using Base.Threads
 using Agents
+using DataFrames
 
 # Define the configuration structure
 struct NetworkConfig
@@ -14,9 +15,12 @@ struct NetworkConfig
     users_tier_proportion::Dict{String, Float64} # Transaction tier ratios
 end
 
+
+
 function initialize_network(config::NetworkConfig)
     users = ArkUser[]  # Initialize an empty array for users
     user_id = 1        # Initialize the user ID counter
+    df = DataFrame(time=Int[], failed_transactions= Vector{Int}[], past_liquidity=Int64[], participating_agent=Int[])  # Define column types
 
     for (tier, ratio) in config.users_tier_proportion
         num_tier_users = round(Int, config.num_users * ratio)
@@ -40,8 +44,8 @@ function initialize_network(config::NetworkConfig)
     properties = Dict(:provider => ArkProvider(config.provider_balance, config.provider_round_lock_timeout, transactions,agents_vtxos,[], true),
         :current_time => 0,
         :failed_transactions => Int64[],
-        :past_liquidity => config.provider_balance,
-        :participating_agent => 0)
+        :df => df,
+        )
 
     # Define the model behavior
     function model_step!(model)
@@ -49,12 +53,16 @@ function initialize_network(config::NetworkConfig)
         chunks = Iterators.partition(allagents(model), floor(Int,length(allagents(model)) ÷ Threads.nthreads()))
         Threads.@threads for chunk in collect(chunks)
             for agent in chunk
-                user_behavior!(agent, model)
+                receiver_agent = random_agent(model)
+                user_behavior!(agent, model, receiver_agent)
             end
         end 
 
-        model.past_liquidity = model.provider.current_liquidity
+        push!(model.df, (model.current_time, model.failed_transactions, model.provider.current_liquidity,  length(model.provider.round_agents)))
+
         model.current_time += 1
+        model.failed_transactions = Int64[]
+        model.provider.round_agents = Int[]
 
         # Remove all spent_transactions whose timeout is >= current_time.
         for utxo in values(model.provider.transactions)
@@ -65,9 +73,7 @@ function initialize_network(config::NetworkConfig)
             end
         end
 
-        model.failed_transactions = Int64[]
-        model.participating_agent = length(model.provider.round_agents)
-        model.provider.round_agents = Int[]
+        
         println("round", model.current_time, "completed")
     end
     
@@ -90,9 +96,8 @@ end
 
 
 function run_network(config::NetworkConfig, steps::Int)
-
-    mdata = [(:failed_transactions), (:past_liquidity), (:participating_agent)]
     model = initialize_network(config)  # Create a network 
-    return run!(model, steps; mdata)           # Simulate 
+    run!(model, steps)
+    return model.df           # Simulate 
     
 end

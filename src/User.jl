@@ -19,7 +19,7 @@ mutable struct ArkUser <: AbstractAgent
 end
 
 
-function user_behavior!(user, model)
+function user_behavior!(user, model, receiver_agent)
     provider::ArkProvider = model.provider
     current_time = model.current_time
     failed_transactions = model.failed_transactions
@@ -51,12 +51,8 @@ function user_behavior!(user, model)
     # Select coins to spend using a greedy algorithm
     spent_utxos, _, change_amount = select_coins_greedy(user_utxos, transfer_amount)
 
-    # Pick a random agent to send funds to
-
-    returned_random_agent = random_agent(model)
-
     # Construct transactions: change back to self, and the actual transfer
-    transfer_transaction = ArkTransaction(uuid4(), returned_random_agent.id, current_time + 10, transfer_amount, false)
+    transfer_transaction = ArkTransaction(uuid4(), receiver_agent.id, current_time + 10, transfer_amount, false)
     new_transactions = [transfer_transaction]    
 
     # Only add a change transaction if change_amount is positive
